@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { authFetch, requireAuth } from '@/lib/api';
 
 export default function SettingsPage() {
     const [host, setHost] = useState('smtp.gmail.com');
@@ -14,8 +15,9 @@ export default function SettingsPage() {
     const [apiStatus, setApiStatus] = useState('');
 
     useEffect(() => {
+        if (!requireAuth()) return;
         // Fetch existing config
-        fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000'}/api/settings/smtp`)
+        authFetch('/api/settings/smtp')
             .then(res => res.json())
             .then(data => {
                 if (data.host) setHost(data.host);
@@ -25,7 +27,7 @@ export default function SettingsPage() {
             })
             .catch(err => console.error("Could not fetch SMTP settings", err));
             
-        fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000'}/api/settings/keys`)
+        authFetch('/api/settings/keys')
             .then(res => res.json())
             .then(data => {
                 if (data.hunter_api_key) setHunterKey(data.hunter_api_key);
@@ -38,7 +40,7 @@ export default function SettingsPage() {
         setIsLoading(true);
         setStatus('');
         try {
-            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000'}/api/settings/smtp`, {
+            const res = await authFetch('/api/settings/smtp', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ host, port, username, password })
@@ -59,14 +61,14 @@ export default function SettingsPage() {
         e.preventDefault();
         setApiStatus('Saving...');
         try {
-            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000'}/api/settings/keys`, {
+            const res = await authFetch('/api/settings/keys', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ hunter_api_key: hunterKey })
             });
             if (res.ok) setApiStatus('API Keys saved!');
             setTimeout(() => setApiStatus(''), 3000);
-        } catch (e) {
+        } catch {
             setApiStatus('Error saving keys.');
         }
     };

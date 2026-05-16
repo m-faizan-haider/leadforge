@@ -2,27 +2,39 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { authFetch, requireAuth } from '@/lib/api';
+
+type Campaign = {
+  id: number;
+  name: string;
+  niche: string;
+  location: string;
+  status: string;
+};
 
 export default function Dashboard() {
-  const [campaigns, setCampaigns] = useState<any[]>([]);
+  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(true);
+  const [apiError, setApiError] = useState('');
 
   const fetchCampaigns = async () => {
     try {
       // Connects to the local FastAPI backend
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000'}/api/campaigns`);
+      const res = await authFetch('/api/campaigns');
       if (res.ok) {
         const data = await res.json();
         setCampaigns(data);
+        setApiError('');
       }
-    } catch (e) {
-      console.error(e);
+    } catch {
+      setApiError('Could not reach the API. Check that FastAPI is running and ALLOWED_ORIGINS includes this frontend URL.');
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
+    if (!requireAuth()) return;
     fetchCampaigns();
     // Poll every 5 seconds for live updates
     const interval = setInterval(fetchCampaigns, 5000);
@@ -38,6 +50,8 @@ export default function Dashboard() {
           <div className="spinner"></div>
           <p>Connecting to backend...</p>
         </div>
+      ) : apiError ? (
+        <p style={{ color: 'var(--warning-color)' }}>{apiError}</p>
       ) : campaigns.length === 0 ? (
         <p style={{ color: 'var(--text-secondary)' }}>No campaigns found. Start by creating a new one!</p>
       ) : (

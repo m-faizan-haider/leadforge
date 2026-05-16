@@ -1,17 +1,50 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
+import { authFetch, requireAuth } from '@/lib/api';
+
+type Lead = {
+  id: number;
+  business_name: string;
+  phone?: string;
+  website?: string;
+  email?: string;
+  opportunity_score: number;
+  tech_stack?: string;
+  status: string;
+  email_draft?: string;
+};
+
+type CampaignData = {
+  campaign: {
+    id: number;
+    name: string;
+    niche: string;
+    location: string;
+    status: string;
+  };
+  leads: Lead[];
+  leads_count: number;
+};
+
+function leadStatusLabel(status: string) {
+  if (status === 'audited') return 'Audited';
+  if (status === 'emailed') return 'In Sequence';
+  if (status === 'site_blocked') return 'Blocked';
+  if (status === 'replied') return 'Replied';
+  return 'Skipped';
+}
 
 export default function CampaignView() {
   const params = useParams();
-  const id = params.id;
-  const [data, setData] = useState<any>(null);
+  const id = String(params.id);
+  const [data, setData] = useState<CampaignData | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedEmail, setSelectedEmail] = useState<string | null>(null);
 
-  const fetchCampaign = async () => {
+  const fetchCampaign = useCallback(async () => {
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000'}/api/campaigns/${id}`);
+      const res = await authFetch(`/api/campaigns/${id}`);
       if (res.ok) {
         const result = await res.json();
         setData(result);
@@ -21,14 +54,13 @@ export default function CampaignView() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [id]);
 
   const handleSendBlast = async () => {
-    if (!confirm("Are you sure you want to blast emails to all valid leads in this campaign?")) return;
+    if (!confirm('Are you sure you want to blast emails to all valid leads in this campaign?')) return;
     try {
       setLoading(true);
-      // Wait for UI loading state to flush before blocking
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000'}/api/campaigns/${id}/send`, { method: 'POST' });
+      const res = await authFetch(`/api/campaigns/${id}/send`, { method: 'POST' });
       if (res.ok) {
         const result = await res.json();
         alert(`Finished: Sent ${result.results?.success || 0} emails.`);
@@ -37,18 +69,18 @@ export default function CampaignView() {
         const err = await res.json();
         alert(`Failed to send blast: ${err.detail || 'Unknown error'}`);
       }
-    } catch (e) {
-      alert("Error contacting API to send emails.");
+    } catch {
+      alert('Error contacting API to send emails.');
     } finally {
       setLoading(false);
     }
   };
 
   const handleForceSequence = async () => {
-    if (!confirm("This will skip the 3-5 day waiting safety mechanism and instantly send Follow-up AI emails to anyone ready. Continue?")) return;
+    if (!confirm('This will skip the 3-5 day waiting safety mechanism and instantly send follow-up AI emails to anyone ready. Continue?')) return;
     try {
       setLoading(true);
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000'}/api/campaigns/${id}/force_sequence`, { method: 'POST' });
+      const res = await authFetch(`/api/campaigns/${id}/force_sequence`, { method: 'POST' });
       if (res.ok) {
         const result = await res.json();
         alert(`Finished: Sent ${result.results?.advanced || 0} follow-up sequences. Errors: ${result.results?.errors || 0}`);
@@ -57,8 +89,8 @@ export default function CampaignView() {
         const err = await res.json();
         alert(`Failed: ${err.detail || 'Unknown error. Make sure SMTP is set.'}`);
       }
-    } catch (e) {
-      alert("Error contacting API.");
+    } catch {
+      alert('Error contacting API.');
     } finally {
       setLoading(false);
     }
@@ -66,16 +98,39 @@ export default function CampaignView() {
 
   const handleMarkReplied = async (leadId: number) => {
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000'}/api/leads/${leadId}/replied`, { method: 'POST' });
+      const res = await authFetch(`/api/leads/${leadId}/replied`, { method: 'POST' });
       if (res.ok) fetchCampaign();
-    } catch(e) { console.error(e); }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleDownloadCsv = async () => {
+    const res = await authFetch(`/api/campaigns/${id}/export`);
+    if (!res.ok) {
+      alert('Could not download CSV.');
+      return;
+    }
+    const blob = await res.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `LeadForge_campaign_${id}.csv`;
+    a.click();
+    window.URL.revokeObjectURL(url);
   };
 
   useEffect(() => {
+    if (!requireAuth()) return;
     fetchCampaign();
+  }, [fetchCampaign, id]);
+
+  useEffect(() => {
+    const status = data?.campaign?.status;
+    if (status !== 'queued' && status !== 'running') return;
     const interval = setInterval(fetchCampaign, 5000);
     return () => clearInterval(interval);
-  }, [id]);
+  }, [data?.campaign?.status, fetchCampaign, id]);
 
   if (loading && !data) {
     return (
@@ -91,7 +146,7 @@ export default function CampaignView() {
   }
 
   const { campaign, leads, leads_count } = data;
-  const isPolling = leads_count < 10; // Simple heuristic for our 10-lead scraper demo
+  const isPolling = campaign.status === 'queued' || campaign.status === 'running';
 
   return (
     <div className="glass-panel" style={{ padding: '2rem' }}>
@@ -102,20 +157,20 @@ export default function CampaignView() {
         </div>
         {isPolling && (
           <div className="status-indicator">
-             <div className="spinner"></div>
-             Scraping in progress... ({leads_count} Leads Extracted)
+            <div className="spinner"></div>
+            Scraping in progress... ({leads_count} Leads Extracted)
           </div>
         )}
         {!isPolling && leads.length > 0 && (
           <div style={{ display: 'flex', gap: '10px' }}>
-            <button className="btn" onClick={() => window.open(`${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000'}/api/campaigns/${id}/export`, '_blank')} style={{ background: 'transparent', color: 'var(--text-primary)', border: '1px solid var(--border-color)' }}>
-                📥 Download CSV
+            <button className="btn" onClick={handleDownloadCsv} style={{ background: 'transparent', color: 'var(--text-primary)', border: '1px solid var(--border-color)' }}>
+              Download CSV
             </button>
             <button className="btn" onClick={handleSendBlast} style={{ background: 'var(--success-color)' }}>
-               🚀 Start Email Sequence
+              Start Email Sequence
             </button>
             <button className="btn" onClick={handleForceSequence} style={{ background: 'transparent', border: '1px solid var(--accent-color)', color: 'var(--accent-color)' }}>
-               ⏩ Force Sequence (Test)
+              Force Sequence (Test)
             </button>
           </div>
         )}
@@ -137,21 +192,21 @@ export default function CampaignView() {
             {leads.length === 0 ? (
               <tr>
                 <td colSpan={6} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-secondary)' }}>
-                  No leads processed yet. The headless browser is currently scraping Google Maps...
+                  No leads processed yet. The campaign is currently scraping and enriching leads...
                 </td>
               </tr>
             ) : (
-              leads.map((lead: any) => (
+              leads.map((lead) => (
                 <tr key={lead.id}>
                   <td>
-                    <strong>{lead.business_name}</strong><br/>
+                    <strong>{lead.business_name}</strong><br />
                     <small style={{ color: 'var(--text-secondary)' }}>{lead.phone}</small>
                   </td>
                   <td>
                     {lead.website ? (
                       <a href={lead.website} target="_blank" rel="noopener noreferrer">Visit Site</a>
                     ) : <span style={{ color: 'var(--text-secondary)' }}>N/A</span>}
-                    <br/>
+                    <br />
                     {lead.email && <small style={{ color: 'var(--accent-color)' }}>{lead.email}</small>}
                   </td>
                   <td>
@@ -164,24 +219,24 @@ export default function CampaignView() {
                     )}
                   </td>
                   <td>
-                    {lead.tech_stack ? <span className="badge medium" style={{background: 'rgba(59, 130, 246, 0.2)', color: '#60a5fa'}}>{lead.tech_stack}</span> : '-'}
+                    {lead.tech_stack ? <span className="badge medium" style={{ background: 'rgba(59, 130, 246, 0.2)', color: '#60a5fa' }}>{lead.tech_stack}</span> : '-'}
                   </td>
                   <td>
-                     {lead.status === 'audited' ? '✅ Audited' : (lead.status === 'emailed' ? '🚀 In Sequence' : (lead.status === 'site_blocked' ? '🚫 Blocked' : (lead.status === 'replied' ? '💬 Replied' : '⚠️ Skipped')))}
-                     {lead.status === 'emailed' && (
-                         <div style={{ marginTop: '0.5rem' }}>
-                            <button onClick={() => handleMarkReplied(lead.id)} style={{ fontSize: '10px', padding: '4px 6px', cursor: 'pointer', background: '#fee2e2', color: '#991b1b', border: 'none', borderRadius: '4px' }}>
-                                Mark Replied
-                            </button>
-                         </div>
-                     )}
+                    {leadStatusLabel(lead.status)}
+                    {lead.status === 'emailed' && (
+                      <div style={{ marginTop: '0.5rem' }}>
+                        <button onClick={() => handleMarkReplied(lead.id)} style={{ fontSize: '10px', padding: '4px 6px', cursor: 'pointer', background: '#fee2e2', color: '#991b1b', border: 'none', borderRadius: '4px' }}>
+                          Mark Replied
+                        </button>
+                      </div>
+                    )}
                   </td>
                   <td>
                     {lead.email_draft ? (
-                      <button 
-                        className="btn" 
+                      <button
+                        className="btn"
                         style={{ padding: '0.4rem 1rem', fontSize: '0.875rem', minWidth: 'auto' }}
-                        onClick={() => setSelectedEmail(lead.email_draft)}
+                        onClick={() => setSelectedEmail(lead.email_draft ?? null)}
                       >
                         View AI Email
                       </button>
@@ -200,19 +255,19 @@ export default function CampaignView() {
 
       {selectedEmail && (
         <div className="modal-backdrop" onClick={() => setSelectedEmail(null)}>
-          <div className="glass-panel modal" onClick={e => e.stopPropagation()}>
+          <div className="glass-panel modal" onClick={(e) => e.stopPropagation()}>
             <button className="modal-close" onClick={() => setSelectedEmail(null)}>&times;</button>
             <h3 style={{ marginTop: '0' }}>Generated AI Cold Email</h3>
-            <p style={{ color: 'var(--text-secondary)' }}>This email is heavily personalized based on the specific weaknesses found on their website architecture.</p>
+            <p style={{ color: 'var(--text-secondary)' }}>This email is personalized based on the weaknesses found on the lead website.</p>
             <div className="email-draft">
               {selectedEmail}
             </div>
             <div style={{ marginTop: '1.5rem', textAlign: 'right', display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
-               <button className="btn" style={{ background: 'transparent', border: '1px solid var(--border-color)', boxShadow: 'none' }} onClick={() => setSelectedEmail(null)}>Close</button>
-               <button className="btn" onClick={() => {
-                  navigator.clipboard.writeText(selectedEmail);
-                  alert('Copied to clipboard!');
-               }}>Copy to Clipboard</button>
+              <button className="btn" style={{ background: 'transparent', border: '1px solid var(--border-color)', boxShadow: 'none' }} onClick={() => setSelectedEmail(null)}>Close</button>
+              <button className="btn" onClick={() => {
+                navigator.clipboard.writeText(selectedEmail);
+                alert('Copied to clipboard!');
+              }}>Copy to Clipboard</button>
             </div>
           </div>
         </div>

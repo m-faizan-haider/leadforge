@@ -1,0 +1,38 @@
+services:
+  - type: web
+    name: leadforge-api
+    env: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: AUTH_SECRET
+        sync: false
+      - key: ALLOWED_ORIGINS
+        sync: false
+      - key: SCRAPER_MODE
+        value: serpapi
+      - key: SERPAPI_KEY
+        sync: false
+      - key: REQUIRE_SERPAPI
+        value: "true"
+      - key: LLM_PROVIDER
+        value: groq
+      - key: GROQ_API_KEY
+        sync: false
+      - key: HUNTER_API_KEY
+        sync: false
+      - key: SIMULATE_EMAIL
+        value: "True"
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false

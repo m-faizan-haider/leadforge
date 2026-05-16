@@ -22,4 +22,5 @@ log_folder: "logs/"
 screenshot_folder: "screenshots/"
 
 # Database Setting
-db_type: "postgresql"  # options: "sqlite", "postgresql"
+# DATABASE_URL is read from environment. Use hosted PostgreSQL for production.
+db_type: "postgresql"

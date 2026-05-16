@@ -1,96 +1,239 @@
-<div align="center">
-  <h1>🚀 LeadForge AI</h1>
-  <p><strong>The Autonomous Multi-Persona Scraper & AI Email Engine</strong></p>
-  
-  [![FastAPI](https://img.shields.io/badge/FastAPI-005571?style=for-the-badge&logo=fastapi)](https://fastapi.tiangolo.com/)
-  [![Next.js](https://img.shields.io/badge/Next.js-black?style=for-the-badge&logo=next.js)](https://nextjs.org/)
-  [![Playwright](https://img.shields.io/badge/Playwright-45ba4b?style=for-the-badge&logo=Playwright)](https://playwright.dev/)
-  [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-316192?style=for-the-badge&logo=postgresql)](https://www.postgresql.org/)
-  [![Groq](https://img.shields.io/badge/Groq-f55036?style=for-the-badge&logo=groq)](https://groq.com)
-</div>
+# LeadForge AI
 
-<hr>
+LeadForge AI is an AI-powered local business prospecting system. It finds businesses from Google Maps data, audits their websites for missed conversion opportunities, scores each lead, and generates personalized cold outreach emails from the audit findings.
 
-## 🧠 What is LeadForge?
+The project is built as a production-oriented SaaS prototype with a FastAPI backend, Next.js dashboard, hosted PostgreSQL support, login/signup, SerpAPI lead sourcing, optional website screenshots, CSV exports, and SMTP sequence tooling.
 
-LeadForge is an elite, open-source AI Sales and Networking SaaS. It completely automates the process of identifying prospects, auditing their online footprint, and drafting hyper-personalized cold outreach sequences.
+## Live Demo
 
-Whether you are an **Agency** looking for B2B Clients, a **Freelancer** seeking contract work, or a **Software Engineer** hunting for a high-paying job, LeadForge dynamically alters its scraping logic and AI prompt systems to fit your exact *Persona*.
+Demo URL: _Coming soon_
 
----
+Backend health check: `/health`
 
-## ⚡ Core Architecture
+## Screenshots
 
-LeadForge is built with a heavy emphasis on bypass resilience and AI orchestration via a powerful separation of concerns:
+Add screenshots here before publishing the portfolio:
 
-- **Frontend (Next.js/React):** A beautiful glassmorphism dashboard to manage Campaign tracking, Email logs, and dynamic User Personas.
-- **Backend (Python FastAPI):** Handles background task execution, database modeling, and the Sequence Engine loop.
-- **The Scraper (Playwright & curl_cffi):** Deploys stealth browsers rotating residential proxies to bypass Cloudflare and scrape Google Maps listings natively.
-- **Auditor & AI (Groq & Llama3):** Audits HTML DOM structures and scores target companies. The Multi-Agent Swarm then drafts contextual multi-step sequences (e.g., Pitch -> Bump -> Breakup).
+- Dashboard campaign list
+- New campaign form
+- Campaign lead table
+- AI email modal
+- Settings page
+- CSV export preview
 
----
+## Core Features
 
-## 🚀 Key Features
+- User signup and login with bearer-token authentication
+- Google Maps lead sourcing through SerpAPI
+- Playwright fallback scraper for local/manual fallback mode
+- Website HTML scraping and contact/social extraction
+- Rule-based website audit for SEO, mobile UX, trust, analytics, and tech stack
+- Opportunity scoring from 0 to 100
+- Persona-based AI cold email generation
+- Optional website screenshot capture per campaign
+- Hosted PostgreSQL support through `DATABASE_URL`
+- CSV export with campaign summary and Excel-friendly UTF-8 encoding
+- SMTP campaign sending and follow-up sequence support
+- `/health` endpoint for API, database, and SerpAPI status
 
-*   **Multi-Persona Swarm:** Create specific profiles for Job Hunting, Freelance, or Agency. The AI Strategist reads the scraped company data and pitches you perfectly based on your exact playbook.
-*   **Automated Background Sequence Engine:** A natively built chronological background loop. If a prospect hasn't replied in 3 days, the engine automatically drafts an AI Follow-up and dispatches it via SMTP. 
-*   **Automated "Kill Switch":** Click "Mark Replied" in the UI and the backend severs the specific lead from the sequence loops to prevent accidental spam.
-*   **Database Integrated SMTP:** Manage email connection strings securely inside the dashboard rather than hardcoded `.env` files.
-*   **Deep Website Auditing:** Detects exact Tech Stacks, missing mobile optimization, and extracts decision-maker emails hidden deep in HTML footers.
+## Tech Stack
 
----
+Backend:
 
-## 💻 Tech Stack Setup
+- Python 3.10
+- FastAPI
+- Uvicorn
+- SQLAlchemy
+- PostgreSQL / Neon
+- Playwright
+- playwright-stealth
+- SerpAPI
+- BeautifulSoup
+- curl_cffi
+- pandas
+- loguru
+- python-dotenv
+- PyYAML
 
-### 1. Requirements
-* Python 3.10+
-* Node.js v18+
-* PostgreSQL DB Instance
-* Groq API Key (For high-speed LLM interference)
-* An SMTP account (e.g., Gmail App Password)
+AI and APIs:
 
-### 2. Environment Configuration
-Create a `.env` file in the root directory:
-```env
-DATABASE_URL=postgresql://user:password@localhost/leadforge
-LLM_PROVIDER=groq
-GROQ_API_KEY=your_key_here
-SIMULATE_EMAIL=True # Set to False to send real emails
+- Groq API
+- Ollama fallback
+- Hunter.io enrichment hook
+- SerpAPI Google Maps API
+- SMTP email providers
+
+Frontend:
+
+- Next.js
+- React
+- TypeScript
+- ESLint
+
+Infrastructure:
+
+- Docker
+- Docker Compose
+- Hosted PostgreSQL-ready configuration
+
+## Workflow
+
+1. User signs up or logs in.
+2. User creates an outreach persona.
+3. User launches a campaign with niche, location, lead count, and optional screenshots.
+4. Backend fetches Google Maps leads through SerpAPI.
+5. Each lead website is fetched and audited.
+6. Lead score is calculated from website weaknesses.
+7. AI generates a personalized cold email.
+8. Leads are saved to PostgreSQL.
+9. User reviews leads, downloads CSV, or starts an email sequence.
+
+## Local Setup
+
+Clone the project:
+
+```bash
+git clone <your-repo-url>
+cd lead-scraper-agent
 ```
 
-### 3. Running Locally (Development)
+Create a Python virtual environment:
 
-**Start the Backend:**
 ```bash
+python -m venv venv
+venv\Scripts\activate
 pip install -r requirements.txt
 playwright install chromium
-uvicorn api.server:app --reload --port 8000
 ```
 
-**Start the Next.js UI:**
+Install frontend dependencies:
+
 ```bash
 cd frontend
 npm install
-npm run dev
+cd ..
 ```
-Access the dashboard at `http://localhost:3000`.
 
----
-
-## 🐳 Docker Production Setup
-For VPS deployment (e.g., DigitalOcean), LeadForge is fully containerized. 
+Create `.env` from the template:
 
 ```bash
-docker-compose up --build -d
+copy .env.example .env
 ```
-*This instantly provisions the PostgreSQL DB, the FastAPI server, the Playwright dependencies, and mounts the volumes securely.*
 
----
+For local development with hosted Neon PostgreSQL, set:
 
-## 📜 Legal Disclaimer
-LeadForge is built for responsible B2B outreach and analytical auditing. Users must comply with their local SPAM laws (CAN-SPAM, GDPR) when dispatching sequences via the SMTP Engine. Playwright scraping components must be used ethically respecting `robots.txt` when possible.
+```env
+APP_ENV=development
+DATABASE_URL="postgresql://USER:PASSWORD@HOST/neondb?sslmode=require&channel_binding=require"
+AUTH_SECRET=replace_with_a_long_random_secret
+ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
+SCRAPER_MODE=serpapi
+SERPAPI_KEY=your_serpapi_key
+REQUIRE_SERPAPI=false
+GROQ_API_KEY=your_groq_api_key
+SIMULATE_EMAIL=True
+```
 
----
-<div align="center">
-  <i>Developed to automate the hustle.</i>
-</div>
+Start the app:
+
+```bash
+start.bat
+```
+
+Frontend:
+
+```text
+http://localhost:3000
+```
+
+Backend docs:
+
+```text
+http://127.0.0.1:8000/docs
+```
+
+Health check:
+
+```text
+http://127.0.0.1:8000/health
+```
+
+## Docker Setup
+
+Create `.env`, then run:
+
+```bash
+docker compose up --build
+```
+
+This starts:
+
+- FastAPI backend on port `8000`
+- PostgreSQL container on port `5432`
+
+For a fully local Docker database, use:
+
+```env
+DATABASE_URL=postgresql://postgres:postgres@postgres:5432/leadforge
+```
+
+For production, use hosted PostgreSQL instead of the local Docker database.
+
+## Production Deployment
+
+Recommended beginner-friendly deployment:
+
+- Database: Neon PostgreSQL
+- Backend: Render, Railway, Fly.io, or VPS Docker deployment
+- Frontend: Vercel
+
+Backend production env example:
+
+```env
+APP_ENV=production
+DATABASE_URL="postgresql://USER:PASSWORD@HOST/neondb?sslmode=require&channel_binding=require"
+AUTH_SECRET=use_a_long_random_secret
+ALLOWED_ORIGINS=https://your-frontend-domain.com
+SCRAPER_MODE=serpapi
+SERPAPI_KEY=your_serpapi_key
+REQUIRE_SERPAPI=true
+GROQ_API_KEY=your_groq_api_key
+SIMULATE_EMAIL=True
+```
+
+Frontend production env:
+
+```env
+NEXT_PUBLIC_API_URL=https://your-backend-domain.com
+```
+
+## Important Security Notes
+
+- Do not commit `.env`.
+- Rotate any API key or database password that was shared publicly.
+- Use hosted PostgreSQL for production.
+- Use a strong `AUTH_SECRET`.
+- Keep `SIMULATE_EMAIL=True` until SMTP compliance is ready.
+- Add unsubscribe and suppression-list support before real cold email campaigns.
+
+## Current Limitations
+
+- Authentication is implemented, but true multi-tenant data isolation is still a future upgrade.
+- Database schema is created with SQLAlchemy `create_all`; Alembic migrations should be added before serious production use.
+- SMTP sending exists, but deliverability, unsubscribe, bounce handling, and compliance tooling need hardening.
+- Playwright fallback scraping can still be blocked by websites or Google UI changes.
+- Website screenshots are optional because many sites are slow or block browser automation.
+
+## Roadmap
+
+- Add Alembic migrations
+- Add user-owned campaigns, personas, leads, SMTP settings, and API keys
+- Add unsubscribe and suppression list
+- Add email verification and bounce handling
+- Add campaign analytics dashboard
+- Add deployment guide for Render/Railway/Vercel
+- Add automated tests for backend routes and scoring logic
+
+## License
+
+MIT

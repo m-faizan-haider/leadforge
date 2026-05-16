@@ -4,6 +4,15 @@ from sqlalchemy.orm import declarative_base, relationship
 
 Base = declarative_base()
 
+class AppUser(Base):
+    __tablename__ = "app_users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    email = Column(String, unique=True, nullable=False, index=True)
+    password_hash = Column(String, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    is_active = Column(Boolean, default=True)
+
 class APIKeys(Base):
     __tablename__ = "api_keys"
     id = Column(Integer, primary_key=True, index=True)

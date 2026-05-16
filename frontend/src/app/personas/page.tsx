@@ -1,9 +1,17 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { authFetch, requireAuth } from '@/lib/api';
+
+type Persona = {
+    id: number;
+    name: string;
+    objective: string;
+    skills?: string;
+};
 
 export default function PersonasPage() {
-    const [personas, setPersonas] = useState<any[]>([]);
+    const [personas, setPersonas] = useState<Persona[]>([]);
     const [name, setName] = useState('');
     const [objective, setObjective] = useState('b2b_agency');
     const [skills, setSkills] = useState('');
@@ -13,20 +21,21 @@ export default function PersonasPage() {
 
     const fetchPersonas = async () => {
         try {
-            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000'}/api/personas`);
+            const res = await authFetch('/api/personas');
             const data = await res.json();
             setPersonas(data);
         } catch (e) { console.error(e); }
     };
 
     useEffect(() => {
-        fetchPersonas();
+        if (!requireAuth()) return;
+        void Promise.resolve().then(fetchPersonas);
     }, []);
 
     const handleSave = async (e: React.FormEvent) => {
         e.preventDefault();
         try {
-            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000'}/api/personas`, {
+            const res = await authFetch('/api/personas', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ name, objective, skills, resume_text: resumeText, value_proposition: valueProp })
@@ -41,7 +50,7 @@ export default function PersonasPage() {
                 fetchPersonas();
                 setTimeout(() => setStatus(''), 3000);
             }
-        } catch (error) {
+        } catch {
             setStatus('Error saving persona.');
         }
     };
