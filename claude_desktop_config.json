@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "leadforge-ai": {
+      "command": "D:\\lead-scraper-agent\\venv\\Scripts\\python.exe",
+      "args": ["D:\\lead-scraper-agent\\mcp_server\\server.py"],
+      "env": {
+        "LEADFORGE_API_URL": "http://localhost:8000"
+      }
+    }
+  }
+}
