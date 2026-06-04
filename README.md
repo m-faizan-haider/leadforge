@@ -1,3 +1,13 @@
+---
+title: LeadForge API
+emoji: 🎯
+colorFrom: blue
+colorTo: purple
+sdk: docker
+pinned: false
+app_port: 7860
+---
+
 # LeadForge AI
 
 LeadForge AI is an AI-powered local business prospecting system. It finds businesses from Google Maps data, audits their websites for missed conversion opportunities, scores each lead, and generates personalized cold outreach emails from the audit findings.
