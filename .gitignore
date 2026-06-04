@@ -46,7 +46,8 @@ leadforge.db
 logs/
 *.log
 screenshots/
-output/
+# Ignore CSVs in output, but keep Python code
+output/*.csv
 outputs/
 downloads/
 *.csv
