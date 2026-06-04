@@ -33,6 +33,7 @@ from mcp import types
 #  CONFIG
 # ──────────────────────────────────────────────
 API_BASE = os.getenv("LEADFORGE_API_URL", "http://localhost:8000")
+API_TOKEN = os.getenv("LEADFORGE_API_TOKEN", "")
 
 app = Server("leadforge-ai")
 
@@ -200,12 +201,63 @@ async def list_tools() -> list[types.Tool]:
                 "required": ["campaign_id"]
             }
         ),
+
+        types.Tool(
+            name="generate_outreach_messages",
+            description=(
+                "📱 Generate multi-channel outreach messages (LinkedIn, WhatsApp, SMS) for all leads "
+                "in a campaign. Uses the same audit data as email generation but tailors the message "
+                "format and tone for each platform. LinkedIn gets a 300-char connection note + follow-up, "
+                "WhatsApp gets a casual 3-sentence message, SMS gets a 160-char text. "
+                "Run this AFTER a campaign is complete (leads must be audited first)."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "campaign_id": {
+                        "type": "integer",
+                        "description": "The campaign ID to generate messages for"
+                    },
+                    "channels": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Which channels to generate. Options: 'linkedin', 'whatsapp', 'sms'. Default: all three.",
+                        "default": ["linkedin", "whatsapp", "sms"]
+                    }
+                },
+                "required": ["campaign_id"]
+            }
+        ),
+
+        types.Tool(
+            name="get_lead_messages",
+            description=(
+                "💬 Get ALL outreach messages for a lead across every channel: Email, LinkedIn "
+                "(connection note + follow-up), WhatsApp, and SMS. Perfect for reviewing and "
+                "copy-pasting messages to each platform. Shows which channels have messages ready."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "lead_id": {
+                        "type": "integer",
+                        "description": "The lead ID to get messages for"
+                    }
+                },
+                "required": ["lead_id"]
+            }
+        ),
     ]
 
 
 # ──────────────────────────────────────────────
 #  TOOL EXECUTION
 # ──────────────────────────────────────────────
+def auth_headers() -> dict:
+    """Return authorization headers for API requests."""
+    return {"Authorization": f"Bearer {API_TOKEN}"}
+
+
 @app.call_tool()
 async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
     async with httpx.AsyncClient(timeout=120.0) as client:
@@ -219,7 +271,7 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
                     "max_leads": arguments.get("max_leads", 5),
                     "persona_id": arguments.get("persona_id")
                 }
-                resp = await client.post(f"{API_BASE}/api/campaigns", json=payload)
+                resp = await client.post(f"{API_BASE}/api/campaigns", json=payload, headers=auth_headers())
                 resp.raise_for_status()
                 data = resp.json()
                 return [types.TextContent(type="text", text=(
@@ -234,7 +286,7 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
 
             # ── list_campaigns ────────────────────────────
             elif name == "list_campaigns":
-                resp = await client.get(f"{API_BASE}/api/campaigns")
+                resp = await client.get(f"{API_BASE}/api/campaigns", headers=auth_headers())
                 resp.raise_for_status()
                 campaigns = resp.json()
                 if not campaigns:
@@ -251,7 +303,7 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
             # ── get_campaign_leads ────────────────────────
             elif name == "get_campaign_leads":
                 campaign_id = arguments["campaign_id"]
-                resp = await client.get(f"{API_BASE}/api/campaigns/{campaign_id}")
+                resp = await client.get(f"{API_BASE}/api/campaigns/{campaign_id}", headers=auth_headers())
                 resp.raise_for_status()
                 data = resp.json()
                 campaign = data.get("campaign", {})
@@ -285,7 +337,7 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
             # ── get_lead_details ──────────────────────────
             elif name == "get_lead_details":
                 lead_id = arguments["lead_id"]
-                resp = await client.get(f"{API_BASE}/api/leads/{lead_id}")
+                resp = await client.get(f"{API_BASE}/api/leads/{lead_id}", headers=auth_headers())
                 resp.raise_for_status()
                 l = resp.json()
 
@@ -329,6 +381,21 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
                     l.get('email_draft') or "No email draft generated (website may have been unreachable).",
                     f"{'─'*55}",
                     f"Pitch angle used: {l.get('pitch_angle_used', 'N/A')}",
+                    f"",
+                    f"📱 MULTI-CHANNEL OUTREACH:",
+                    f"{'─'*55}",
+                    f"🔗 LinkedIn Connection Note:",
+                    l.get('linkedin_connection_note') or "— Not generated yet. Use generate_outreach_messages.",
+                    f"",
+                    f"🔗 LinkedIn Follow-up:",
+                    l.get('linkedin_followup') or "— Not generated yet.",
+                    f"",
+                    f"💬 WhatsApp Message:",
+                    l.get('whatsapp_message') or "— Not generated yet.",
+                    f"",
+                    f"📱 SMS Message:",
+                    l.get('sms_message') or "— Not generated yet.",
+                    f"{'─'*55}",
                 ])
                 return [types.TextContent(type="text", text=text)]
 
@@ -341,7 +408,7 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
                     "value_proposition": arguments["value_proposition"],
                     "resume_text": ""
                 }
-                resp = await client.post(f"{API_BASE}/api/personas", json=payload)
+                resp = await client.post(f"{API_BASE}/api/personas", json=payload, headers=auth_headers())
                 resp.raise_for_status()
                 data = resp.json()
                 return [types.TextContent(type="text", text=(
@@ -356,7 +423,7 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
 
             # ── list_personas ─────────────────────────────
             elif name == "list_personas":
-                resp = await client.get(f"{API_BASE}/api/personas")
+                resp = await client.get(f"{API_BASE}/api/personas", headers=auth_headers())
                 resp.raise_for_status()
                 personas = resp.json()
                 if not personas:
@@ -374,7 +441,7 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
             # ── send_campaign_emails ──────────────────────
             elif name == "send_campaign_emails":
                 campaign_id = arguments["campaign_id"]
-                resp = await client.post(f"{API_BASE}/api/campaigns/{campaign_id}/send")
+                resp = await client.post(f"{API_BASE}/api/campaigns/{campaign_id}/send", headers=auth_headers())
                 resp.raise_for_status()
                 data = resp.json()
                 results = data.get("results", {})
@@ -390,7 +457,7 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
             # ── export_campaign_csv ───────────────────────
             elif name == "export_campaign_csv":
                 campaign_id = arguments["campaign_id"]
-                resp = await client.get(f"{API_BASE}/api/campaigns/{campaign_id}/export")
+                resp = await client.get(f"{API_BASE}/api/campaigns/{campaign_id}/export", headers=auth_headers())
                 resp.raise_for_status()
 
                 export_dir = os.path.join(
@@ -415,6 +482,87 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
                     f"💡 Excel tip: Apply Conditional Formatting on 'priority_tier':\n"
                     f"   High = Green, Medium = Yellow, Low = Red"
                 ))]
+
+            # ── generate_outreach_messages ─────────────
+            elif name == "generate_outreach_messages":
+                campaign_id = arguments["campaign_id"]
+                channels = arguments.get("channels", ["linkedin", "whatsapp", "sms"])
+                payload = {"channels": channels}
+                resp = await client.post(
+                    f"{API_BASE}/api/campaigns/{campaign_id}/generate-messages",
+                    json=payload,
+                    headers=auth_headers(),
+                    timeout=300.0,
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                results = data.get("results", {})
+                return [types.TextContent(type="text", text=(
+                    f"📱 Multi-channel messages generated!\n\n"
+                    f"{data.get('message', '')}\n\n"
+                    f"Leads processed : {results.get('generated', 0)} / {results.get('total_leads', 0)}\n"
+                    f"Channels        : {', '.join(results.get('channels', []))}\n\n"
+                    f"Use get_lead_messages(lead_id=<ID>) to see all messages for a lead.\n"
+                    f"Or use get_lead_details(lead_id=<ID>) for the full profile + messages."
+                ))]
+
+            # ── get_lead_messages ──────────────────────
+            elif name == "get_lead_messages":
+                lead_id = arguments["lead_id"]
+                resp = await client.get(f"{API_BASE}/api/leads/{lead_id}/messages", headers=auth_headers())
+                resp.raise_for_status()
+                data = resp.json()
+                channels = data.get("channels", {})
+
+                lines = [
+                    f"{'─'*55}",
+                    f"💬 OUTREACH MESSAGES: {data.get('business_name', 'Unknown')}",
+                    f"{'─'*55}",
+                ]
+
+                # Email
+                email_ch = channels.get("email", {})
+                if email_ch.get("available"):
+                    lines.append(f"\n✉️  EMAIL ({email_ch.get('pitch_angle', '')}):\n")
+                    lines.append(email_ch.get("message", ""))
+                else:
+                    lines.append("\n✉️  EMAIL: — Not available")
+
+                # LinkedIn
+                li_ch = channels.get("linkedin", {})
+                if li_ch.get("available"):
+                    lines.append(f"\n🔗 LINKEDIN CONNECTION NOTE ({len(li_ch.get('connection_note', ''))} chars):")
+                    lines.append(li_ch.get("connection_note", ""))
+                    lines.append(f"\n🔗 LINKEDIN FOLLOW-UP:")
+                    lines.append(li_ch.get("followup", ""))
+                else:
+                    lines.append("\n🔗 LINKEDIN: — Not generated yet")
+
+                # WhatsApp
+                wa_ch = channels.get("whatsapp", {})
+                if wa_ch.get("available"):
+                    lines.append(f"\n💬 WHATSAPP:")
+                    lines.append(wa_ch.get("message", ""))
+                else:
+                    lines.append("\n💬 WHATSAPP: — Not generated yet")
+
+                # SMS
+                sms_ch = channels.get("sms", {})
+                if sms_ch.get("available"):
+                    lines.append(f"\n📱 SMS ({len(sms_ch.get('message', ''))} chars):")
+                    lines.append(sms_ch.get("message", ""))
+                else:
+                    lines.append("\n📱 SMS: — Not generated yet")
+
+                lines.append(f"\n{'─'*55}")
+
+                # Summary
+                available = [ch for ch, info in channels.items() if info.get("available")]
+                lines.append(f"\nChannels ready: {', '.join(available) if available else 'None'}")
+                if not li_ch.get("available") or not wa_ch.get("available") or not sms_ch.get("available"):
+                    lines.append("💡 Run generate_outreach_messages to create missing channel messages.")
+
+                return [types.TextContent(type="text", text="\n".join(lines))]
 
             else:
                 return [types.TextContent(type="text", text=f"❌ Unknown tool: '{name}'")]
@@ -451,4 +599,11 @@ async def main():
         )
 
 if __name__ == "__main__":
+    if not API_TOKEN or API_TOKEN == "PASTE_YOUR_TOKEN_HERE":
+        print(
+            "WARNING: LEADFORGE_API_TOKEN is not set. All API calls will fail with 401.\n"
+            "  Get your token by running: POST http://localhost:8000/api/auth/login",
+            file=sys.stderr,
+        )
     asyncio.run(main())
+

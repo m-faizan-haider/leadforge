@@ -24,7 +24,7 @@ just by talking to Claude — no UI required.
 
 ---
 
-## Setup (3 Steps)
+## Setup (4 Steps)
 
 ### Step 1 — Make sure LeadForge Backend is running
 ```powershell
@@ -36,17 +36,26 @@ Or manually:
 venv\Scripts\python.exe -m uvicorn api.server:app --port 8000
 ```
 
-### Step 2 — Register with Claude Desktop
-The config has already been copied to:
+### Step 2 — Get your API token
+Run this in PowerShell:
+```powershell
+Invoke-RestMethod -Uri http://localhost:8000/api/auth/login -Method POST `
+  -ContentType 'application/json' `
+  -Body '{"email": "your@email.com", "password": "yourpassword"}'
 ```
-C:\Users\DELL\AppData\Roaming\Claude\claude_desktop_config.json
+Copy the `token` value from the response and paste it into
+`claude_desktop_config.json` under `LEADFORGE_API_TOKEN`.
+
+### Step 3 — Register with Claude Desktop
+Copy the config to Claude Desktop's config directory:
 ```
-If you ever need to re-install it:
+%APPDATA%\Claude\claude_desktop_config.json
+```
 ```powershell
 Copy-Item "claude_desktop_config.json" "$env:APPDATA\Claude\claude_desktop_config.json" -Force
 ```
 
-### Step 3 — Restart Claude Desktop
+### Step 4 — Restart Claude Desktop
 Fully quit and reopen Claude Desktop. You will see a hammer icon (🔨)
 in the chat input box — that means LeadForge tools are connected!
 
@@ -72,9 +81,18 @@ Claude: [calls get_campaign_leads] 🎯 Campaign: Plumbers in Dubai...
         ⚡ Fix-It Fast Services (Score: 45/100) — email draft ready
         ...
 
-You: Show me the full email draft for lead 12.
+You: Generate LinkedIn and WhatsApp messages for campaign 3.
 
-Claude: [calls get_lead_details] ...full audit + cold email displayed...
+Claude: [calls generate_outreach_messages] 📱 Multi-channel messages generated!
+        Leads processed: 5/5, Channels: linkedin, whatsapp
+
+You: Show me all messages for lead 12.
+
+Claude: [calls get_lead_messages]
+        ✉️  EMAIL: Subject: Quick question about your website...
+        🔗 LINKEDIN: Hi Ahmed — great reviews on Google Maps...
+        💬 WHATSAPP: Hi Ahmed 👋 Your plumbing business has solid reviews...
+        📱 SMS: Hi Ahmed, your site isn't mobile-friendly. Reply YES for free audit.
 
 You: Send the emails for campaign 3.
 

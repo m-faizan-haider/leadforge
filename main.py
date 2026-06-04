@@ -14,7 +14,9 @@ from scraper.website_scraper import scrape_website_html
 from scraper.screenshot import capture_screenshot
 from auditor.rule_engine import audit_html
 from auditor.scorer import calculate_opportunity_score, format_audit_summary_for_ai
+from auditor.pagespeed import fetch_pagespeed
 from ai.email_generator import generate_cold_email
+from ai.message_generator import generate_all_channel_messages
 from output.csv_writer import export_leads_to_csv
 from scraper.enrichment import find_decision_maker_email
 
@@ -148,6 +150,23 @@ async def process_campaign(
             findings = audit_html(site_data["html"], url)
             lead_data["tech_stack"] = findings["tech"]["stack"]
 
+            # Phase 4.15: PageSpeed Insights Audit (free Google API)
+            try:
+                logger.info(f"  Fetching PageSpeed scores for {name}...")
+                perf_data = fetch_pagespeed(url)
+                findings["performance"] = perf_data
+                lead_data["pagespeed_mobile"] = perf_data.get("mobile_score")
+                lead_data["pagespeed_desktop"] = perf_data.get("desktop_score")
+                lead_data["pagespeed_lcp"] = perf_data.get("lcp")
+                lead_data["pagespeed_cls"] = perf_data.get("cls")
+            except Exception as e:
+                logger.warning(f"  PageSpeed fetch failed for {name}: {e}")
+                findings["performance"] = {}
+                lead_data["pagespeed_mobile"] = None
+                lead_data["pagespeed_desktop"] = None
+                lead_data["pagespeed_lcp"] = None
+                lead_data["pagespeed_cls"] = None
+
             # Phase 4.5: Deep Context Engine (Hunter.io Sniper)
             enriched_contact = None
             if hunter_api_key:
@@ -165,7 +184,7 @@ async def process_campaign(
             elif not lead_data.get("email") and findings.get("contact", {}).get("emails"):
                 lead_data["email"] = findings["contact"]["emails"][0]
 
-            # Phase 4b: Opportunity Scoring
+            # Phase 4b: Opportunity Scoring (now includes PageSpeed data)
             score = calculate_opportunity_score(findings, lead_data.get("review_count", 0))
             lead_data["opportunity_score"] = score
             lead_data["audit_findings"] = findings
@@ -195,6 +214,23 @@ async def process_campaign(
 
             lead_data["email_draft"] = draft
             lead_data["pitch_angle_used"] = angle
+
+            # Phase 6: Multi-Channel Message Generation (LinkedIn, WhatsApp, SMS)
+            try:
+                logger.info(f"  Generating multi-channel outreach messages...")
+                channel_msgs = generate_all_channel_messages(
+                    name, summary, persona, lead_data.get("first_name")
+                )
+                lead_data["linkedin_connection_note"] = channel_msgs.get("linkedin_connection_note", "")
+                lead_data["linkedin_followup"] = channel_msgs.get("linkedin_followup", "")
+                lead_data["whatsapp_message"] = channel_msgs.get("whatsapp_message", "")
+                lead_data["sms_message"] = channel_msgs.get("sms_message", "")
+            except Exception as e:
+                logger.warning(f"  Multi-channel generation failed for {name}: {e}")
+                lead_data["linkedin_connection_note"] = ""
+                lead_data["linkedin_followup"] = ""
+                lead_data["whatsapp_message"] = ""
+                lead_data["sms_message"] = ""
 
             # *** KEY FIX: status is audited if we have email, regardless of earlier errors ***
             lead_data["status"] = "audited"
@@ -238,6 +274,14 @@ async def process_campaign(
                     audit_findings=ld.get("audit_findings", {}),
                     email_draft=ld.get("email_draft"),
                     pitch_angle_used=ld.get("pitch_angle_used"),
+                    linkedin_connection_note=ld.get("linkedin_connection_note", ""),
+                    linkedin_followup=ld.get("linkedin_followup", ""),
+                    whatsapp_message=ld.get("whatsapp_message", ""),
+                    sms_message=ld.get("sms_message", ""),
+                    pagespeed_mobile=ld.get("pagespeed_mobile"),
+                    pagespeed_desktop=ld.get("pagespeed_desktop"),
+                    pagespeed_lcp=ld.get("pagespeed_lcp"),
+                    pagespeed_cls=ld.get("pagespeed_cls"),
                     status=ld.get("status")
                 )
                 db.add(db_lead)

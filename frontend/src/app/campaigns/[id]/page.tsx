@@ -13,6 +13,10 @@ type Lead = {
   tech_stack?: string;
   status: string;
   email_draft?: string;
+  pagespeed_mobile?: number | null;
+  pagespeed_desktop?: number | null;
+  pagespeed_lcp?: string | null;
+  pagespeed_cls?: string | null;
 };
 
 type CampaignData = {
@@ -183,6 +187,7 @@ export default function CampaignView() {
               <th>Business Name</th>
               <th>Website</th>
               <th>Opp. Score</th>
+              <th>PageSpeed</th>
               <th>Tech</th>
               <th>Status</th>
               <th>AI Action</th>
@@ -191,7 +196,7 @@ export default function CampaignView() {
           <tbody>
             {leads.length === 0 ? (
               <tr>
-                <td colSpan={6} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-secondary)' }}>
+                <td colSpan={7} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-secondary)' }}>
                   No leads processed yet. The campaign is currently scraping and enriching leads...
                 </td>
               </tr>
@@ -216,6 +221,66 @@ export default function CampaignView() {
                       </span>
                     ) : (
                       <span className="badge low">0/100</span>
+                    )}
+                  </td>
+                  <td>
+                    {lead.pagespeed_mobile != null ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <span
+                          title={`LCP: ${lead.pagespeed_lcp ?? 'N/A'} | CLS: ${lead.pagespeed_cls ?? 'N/A'}`}
+                          style={{
+                            display: 'inline-block',
+                            padding: '3px 8px',
+                            borderRadius: '12px',
+                            fontSize: '0.78rem',
+                            fontWeight: 700,
+                            background:
+                              lead.pagespeed_mobile < 50
+                                ? 'rgba(239,68,68,0.18)'
+                                : lead.pagespeed_mobile < 90
+                                ? 'rgba(245,158,11,0.18)'
+                                : 'rgba(34,197,94,0.18)',
+                            color:
+                              lead.pagespeed_mobile < 50
+                                ? '#f87171'
+                                : lead.pagespeed_mobile < 90
+                                ? '#fbbf24'
+                                : '#4ade80',
+                          }}
+                        >
+                          📱 {lead.pagespeed_mobile}/100
+                        </span>
+                        {lead.pagespeed_desktop != null && (
+                          <span
+                            style={{
+                              display: 'inline-block',
+                              padding: '3px 8px',
+                              borderRadius: '12px',
+                              fontSize: '0.78rem',
+                              fontWeight: 700,
+                              background:
+                                lead.pagespeed_desktop < 50
+                                  ? 'rgba(239,68,68,0.18)'
+                                  : lead.pagespeed_desktop < 90
+                                  ? 'rgba(245,158,11,0.18)'
+                                  : 'rgba(34,197,94,0.18)',
+                              color:
+                                lead.pagespeed_desktop < 50
+                                  ? '#f87171'
+                                  : lead.pagespeed_desktop < 90
+                                  ? '#fbbf24'
+                                  : '#4ade80',
+                            }}
+                          >
+                            🖥 {lead.pagespeed_desktop}/100
+                          </span>
+                        )}
+                        {lead.pagespeed_lcp && (
+                          <small style={{ color: 'var(--text-secondary)', fontSize: '0.72rem' }}>LCP: {lead.pagespeed_lcp}</small>
+                        )}
+                      </div>
+                    ) : (
+                      <span style={{ color: 'var(--text-secondary)', fontSize: '0.8rem' }}>—</span>
                     )}
                   </td>
                   <td>

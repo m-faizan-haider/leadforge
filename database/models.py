@@ -77,10 +77,22 @@ class Lead(Base):
     opportunity_score = Column(Integer, default=0)
     audit_findings = Column(JSON, default=dict)
     
-    # AI Output
+    # AI Output — Email
     email_draft = Column(String)
     pitch_angle_used = Column(String)
     
+    # AI Output — Multi-Channel Outreach
+    linkedin_connection_note = Column(String)    # 300 char max connection request
+    linkedin_followup = Column(String)           # Follow-up message after accept
+    whatsapp_message = Column(String)            # Short WhatsApp text
+    sms_message = Column(String)                 # 160 char SMS
+
+    # PageSpeed Insights scores (Google free API)
+    pagespeed_mobile = Column(Integer, nullable=True)   # 0–100 mobile Lighthouse score
+    pagespeed_desktop = Column(Integer, nullable=True)  # 0–100 desktop Lighthouse score
+    pagespeed_lcp = Column(String, nullable=True)       # Largest Contentful Paint e.g. "4.2 s"
+    pagespeed_cls = Column(String, nullable=True)       # Cumulative Layout Shift e.g. "0.25"
+
     status = Column(String, default="new", index=True) # new, emailed, replied, converted, skipped
     created_at = Column(DateTime, default=datetime.utcnow)
     
@@ -109,6 +121,26 @@ class EmailLog(Base):
     status = Column(String, default="sent") # sent, failed, opened, replied
     error_message = Column(String)
     sent_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    lead = relationship("Lead")
+    campaign = relationship("Campaign")
+
+
+class OutreachLog(Base):
+    """Tracks outreach attempts across all channels (email, linkedin, whatsapp, sms)."""
+    __tablename__ = "outreach_logs"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    lead_id = Column(Integer, ForeignKey("leads.id"), index=True)
+    campaign_id = Column(Integer, ForeignKey("campaigns.id"), index=True)
+    
+    channel = Column(String, index=True)      # "email", "linkedin", "whatsapp", "sms"
+    message_text = Column(Text)               # The actual message sent/copied
+    status = Column(String, default="generated")  # generated, sent, replied, failed
+    sent_at = Column(DateTime, nullable=True)
+    replied_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
     
     # Relationships
     lead = relationship("Lead")

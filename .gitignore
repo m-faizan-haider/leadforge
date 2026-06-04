@@ -54,3 +54,8 @@ downloads/
 # Mac / Windows
 .DS_Store
 Thumbs.db
+
+# Sensitive config files (NEVER COMMIT)
+claude_desktop_config.json
+refresh_token.ps1
+*.ps1

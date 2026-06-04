@@ -25,10 +25,12 @@ from fastapi.responses import StreamingResponse
 
 from config import settings
 from database.db import engine, init_db, SessionLocal
-from database.models import AppUser, Campaign, Lead, SMTPConfig, EmailLog, UserPersona, APIKeys
+from database.models import AppUser, Campaign, Lead, SMTPConfig, EmailLog, UserPersona, APIKeys, OutreachLog
 from output.smtp_sender import send_email_blast
 from output.csv_writer import build_campaign_summary
 from ai.email_generator import generate_followup_email
+from ai.message_generator import generate_all_channel_messages
+from auditor.scorer import format_audit_summary_for_ai
 from main import process_campaign
 
 MASKED_SECRET = "********"
@@ -466,7 +468,14 @@ def get_campaign(campaign_id: int, db: Session = Depends(get_db_session), curren
                 "opportunity_score": l.opportunity_score,
                 "tech_stack": l.tech_stack,
                 "status": l.status,
-                "email_draft": l.email_draft
+                "email_draft": l.email_draft,
+                "has_linkedin": bool(l.linkedin_connection_note),
+                "has_whatsapp": bool(l.whatsapp_message),
+                "has_sms": bool(l.sms_message),
+                "pagespeed_mobile": l.pagespeed_mobile,
+                "pagespeed_desktop": l.pagespeed_desktop,
+                "pagespeed_lcp": l.pagespeed_lcp,
+                "pagespeed_cls": l.pagespeed_cls,
             } for l in leads
         ],
         "leads_count": len(leads)
@@ -478,6 +487,139 @@ def get_lead(lead_id: int, db: Session = Depends(get_db_session), current_user: 
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
     return lead
+
+
+@app.get("/api/leads/{lead_id}/messages")
+def get_lead_messages(lead_id: int, db: Session = Depends(get_db_session), current_user: AppUser = Depends(get_current_user)):
+    """Get all multi-channel outreach messages for a single lead."""
+    lead = db.query(Lead).filter(Lead.id == lead_id).first()
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    
+    # Get outreach logs for this lead
+    logs = db.query(OutreachLog).filter(OutreachLog.lead_id == lead_id).order_by(OutreachLog.created_at.desc()).all()
+    
+    return {
+        "lead_id": lead.id,
+        "business_name": lead.business_name,
+        "channels": {
+            "email": {
+                "message": lead.email_draft or "",
+                "pitch_angle": lead.pitch_angle_used or "",
+                "available": bool(lead.email_draft),
+            },
+            "linkedin": {
+                "connection_note": lead.linkedin_connection_note or "",
+                "followup": lead.linkedin_followup or "",
+                "available": bool(lead.linkedin_connection_note),
+            },
+            "whatsapp": {
+                "message": lead.whatsapp_message or "",
+                "available": bool(lead.whatsapp_message),
+            },
+            "sms": {
+                "message": lead.sms_message or "",
+                "available": bool(lead.sms_message),
+            },
+        },
+        "outreach_logs": [
+            {
+                "id": log.id,
+                "channel": log.channel,
+                "status": log.status,
+                "sent_at": log.sent_at,
+                "replied_at": log.replied_at,
+            }
+            for log in logs
+        ],
+    }
+
+
+class GenerateMessagesRequest(BaseModel):
+    channels: list[str] = ["linkedin", "whatsapp", "sms"]
+
+
+@app.post("/api/campaigns/{campaign_id}/generate-messages")
+def generate_campaign_messages(
+    campaign_id: int,
+    req: GenerateMessagesRequest,
+    db: Session = Depends(get_db_session),
+    current_user: AppUser = Depends(get_current_user),
+):
+    """Generate multi-channel messages for all leads in a campaign that don't have them yet."""
+    campaign = db.query(Campaign).filter(Campaign.id == campaign_id).first()
+    if not campaign:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+
+    # Get leads that have audit findings but missing multi-channel messages
+    leads = db.query(Lead).filter(
+        Lead.campaign_id == campaign_id,
+        Lead.status.in_(["audited", "emailed"]),
+    ).all()
+
+    if not leads:
+        return {"message": "No eligible leads found.", "results": {"generated": 0}}
+
+    # Load persona if campaign has one
+    persona = None
+    if campaign.persona_id:
+        persona = db.query(UserPersona).filter(UserPersona.id == campaign.persona_id).first()
+
+    generated_count = 0
+    for lead in leads:
+        # Skip if all requested channels already have messages
+        already_has_all = True
+        if "linkedin" in req.channels and not lead.linkedin_connection_note:
+            already_has_all = False
+        if "whatsapp" in req.channels and not lead.whatsapp_message:
+            already_has_all = False
+        if "sms" in req.channels and not lead.sms_message:
+            already_has_all = False
+        if already_has_all:
+            continue
+
+        # Build audit summary from stored findings
+        summary = ""
+        if lead.audit_findings:
+            try:
+                summary = format_audit_summary_for_ai(lead.audit_findings)
+            except Exception:
+                summary = ""
+        
+        if not summary:
+            continue
+
+        try:
+            msgs = generate_all_channel_messages(
+                business_name=lead.business_name,
+                weaknesses_summary=summary,
+                persona=persona,
+                first_name=None,
+                channels=req.channels,
+            )
+
+            if msgs.get("linkedin_connection_note") and not lead.linkedin_connection_note:
+                lead.linkedin_connection_note = msgs["linkedin_connection_note"]
+            if msgs.get("linkedin_followup") and not lead.linkedin_followup:
+                lead.linkedin_followup = msgs["linkedin_followup"]
+            if msgs.get("whatsapp_message") and not lead.whatsapp_message:
+                lead.whatsapp_message = msgs["whatsapp_message"]
+            if msgs.get("sms_message") and not lead.sms_message:
+                lead.sms_message = msgs["sms_message"]
+
+            generated_count += 1
+        except Exception as e:
+            logger.error(f"Multi-channel generation failed for lead {lead.id}: {e}")
+
+    db.commit()
+    return {
+        "message": f"Generated multi-channel messages for {generated_count} leads",
+        "results": {
+            "generated": generated_count,
+            "total_leads": len(leads),
+            "channels": req.channels,
+        },
+    }
 
 @app.post("/api/leads/{lead_id}/replied")
 def mark_lead_replied(lead_id: int, db: Session = Depends(get_db_session), current_user: AppUser = Depends(get_current_user)):
@@ -586,9 +728,11 @@ def export_campaign_csv(campaign_id: int, db: Session = Depends(get_db_session),
     # Write headers
     writer.writerow([
         "Business Name", "Phone", "Email", "Website", "Address",
-        "Opportunity Score", "Status", "Tech Stack", "Facebook", "Instagram", "LinkedIn", "AI Pitch Angle", "Email Draft"
+        "Opportunity Score", "Status", "Tech Stack",
+        "PageSpeed Mobile", "PageSpeed Desktop", "LCP", "CLS",
+        "Facebook", "Instagram", "LinkedIn", "AI Pitch Angle", "Email Draft"
     ])
-    
+
     for l in leads:
         writer.writerow([
             l.business_name,
@@ -599,6 +743,10 @@ def export_campaign_csv(campaign_id: int, db: Session = Depends(get_db_session),
             l.opportunity_score,
             l.status,
             l.tech_stack,
+            l.pagespeed_mobile if l.pagespeed_mobile is not None else "",
+            l.pagespeed_desktop if l.pagespeed_desktop is not None else "",
+            l.pagespeed_lcp or "",
+            l.pagespeed_cls or "",
             l.facebook,
             l.instagram,
             l.linkedin,
