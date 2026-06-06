@@ -7,7 +7,7 @@ The project is built as a production-oriented SaaS prototype with a FastAPI back
 
 ## Live Demo
 
-[Demo URL: _Coming soon_](https://leadforge-bice.vercel.app/)
+(https://leadforge-bice.vercel.app/)
 
 Backend health check: `/health`
 
